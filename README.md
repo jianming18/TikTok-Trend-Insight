@@ -10,7 +10,7 @@ python3 -m http.server 4173
 
 浏览器访问：`http://localhost:4173`
 
-## 已实现能力（对应 PRD）
+
 
 - Dashboard：首页概览、Top hashtags/music/videos、AI 摘要、爆发告警、更新时间
 - Trends：趋势卡片 + 增长/互动关键指标
