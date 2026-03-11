@@ -43,7 +43,14 @@ const i18n = {
     alertLimit: "告警上限",
     sortHeat: "按热度",
     sortER: "按互动率",
-    sortTrend: "按趋势分"
+    sortTrend: "按趋势分",
+    search: "搜索",
+    searchPlaceholder: "按视频描述/作者搜索",
+    remove: "移除",
+    monitorExists: "该账号已存在",
+    monitorInvalid: "仅支持字母、数字、下划线和点",
+    monitorAdded: "已添加监控账号",
+    monitorRemoved: "已移除监控账号"
   },
   en: {
     title: "TikTok Trend Insight",
@@ -87,7 +94,14 @@ const i18n = {
     alertLimit: "Alert limit",
     sortHeat: "Heat",
     sortER: "Engagement",
-    sortTrend: "Trend score"
+    sortTrend: "Trend score",
+    search: "Search",
+    searchPlaceholder: "Search desc / author",
+    remove: "Remove",
+    monitorExists: "Account already exists",
+    monitorInvalid: "Only letters, numbers, underscore and dot are supported",
+    monitorAdded: "Monitor account added",
+    monitorRemoved: "Monitor account removed"
   }
 };
 
@@ -154,8 +168,10 @@ const state = {
   membership: localStorage.getItem("tti-membership") || "free",
   favorites: JSON.parse(localStorage.getItem("tti-favorites") || "[]"),
   monitors: JSON.parse(localStorage.getItem("tti-monitors") || '["creator_lab"]'),
-  hashtagFilter: "all",
-  sortBy: "heat"
+  hashtagFilter: localStorage.getItem("tti-hashtag-filter") || "all",
+  sortBy: localStorage.getItem("tti-sort-by") || "heat",
+  query: localStorage.getItem("tti-query") || "",
+  status: ""
 };
 
 const membershipLimits = {
@@ -212,7 +228,7 @@ function dashboardView() {
       .join("")}</section>
     <section class="card"><h3>${t("aiSummary")}</h3><p>${state.lang === "zh" ? "转场与效率型内容增长最快，建议结合热门音乐与短时长结构。" : "Transition and efficiency-style content grows fastest. Pair trending audio with short formats."}</p></section>
     <section class="card alert"><h3>${t("burstAlerts")}</h3><div>#transition +45%</div><div>#mealprep +31%</div></section>
-    <section class="card"><h3>${t("updatedAt")}</h3><div>${now.toLocaleString()}</div></section>
+    <section class="card"><h3>${t("updatedAt")}</h3><div>${now.toLocaleString()}</div><p class="muted">${videos.length} videos / ${new Set(videos.map((v) => v.author_username)).size} creators</p></section>
   </div>`;
 }
 
@@ -242,7 +258,12 @@ function sortedVideos(list) {
 
 function videoListView() {
   const filtered = state.hashtagFilter === "all" ? enriched : enriched.filter((v) => v.hashtag === state.hashtagFilter);
-  const list = sortedVideos(filtered);
+  const queried = filtered.filter((v) => {
+    if (!state.query.trim()) return true;
+    const q = state.query.toLowerCase();
+    return v.desc.toLowerCase().includes(q) || v.author_username.toLowerCase().includes(q);
+  });
+  const list = sortedVideos(queried);
   const rows = list
     .map(
       (v) => `<tr>
@@ -266,6 +287,9 @@ function videoListView() {
         <option value="er" ${state.sortBy === "er" ? "selected" : ""}>${t("sortER")}</option>
         <option value="trend" ${state.sortBy === "trend" ? "selected" : ""}>${t("sortTrend")}</option>
       </select>
+    </label>
+    <label>${t("search")}
+      <input id="search-query" value="${state.query}" placeholder="${t("searchPlaceholder")}" />
     </label>
   </div>
   <table class="table"><thead><tr><th>${t("videoCol")}</th><th>${t("authorCol")}</th><th>${t("playCol")}</th><th>ER</th><th>${t("timeCol")}</th><th>${t("linkCol")}</th><th>${t("favCol")}</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="muted">${t("empty")}</td></tr>`}</tbody></table></section>`;
@@ -307,18 +331,21 @@ function monitorView() {
   const limit = membershipLimits[state.membership];
   const locked = state.monitors.length >= limit.monitor;
   return `<section class="card ${locked ? "locked" : ""}"><h3>${i18n[state.lang].tabs[7]}</h3>
-  <div>${state.monitors.map((a) => `<div>@${a}</div>`).join("")}</div>
+  <div>${state.monitors.map((a) => `<div class="row"><span>@${a}</span><button data-remove-monitor="${a}">${t("remove")}</button></div>`).join("")}</div>
   <div class="row"><input id="monitor-input" placeholder="${t("placeholder")}" /><button id="monitor-add">${t("addMonitor")}</button></div>
-  <p class="muted">limit: ${limit.monitor}</p>${locked ? `<p class="muted">${t("noPermission")}</p>` : ""}</section>`;
+  <p class="muted">limit: ${limit.monitor}</p>${locked ? `<p class="muted">${t("noPermission")}</p>` : ""}
+  ${state.status ? `<p class="success">${state.status}</p>` : ""}</section>`;
 }
 
 function alertView() {
   const limit = membershipLimits[state.membership];
-  const alerts = [
-    "#transition burst +45%",
-    "#travel slowdown -12%",
-    "@creator_lab engagement anomaly"
-  ];
+  const trendAlerts = [...enriched]
+    .sort((a, b) => b.burst_score - a.burst_score)
+    .slice(0, 2)
+    .map((v) => `#${v.hashtag} burst +${(v.growth.h24 * 100).toFixed(1)}%`);
+  const riskAlert = [...enriched].sort((a, b) => a.engagement_rate - b.engagement_rate)[0];
+  const monitorAlerts = state.monitors.slice(0, 2).map((m) => `@${m} watchlist update`);
+  const alerts = [...trendAlerts, `#${riskAlert.hashtag} low ER ${(riskAlert.engagement_rate * 100).toFixed(2)}%`, ...monitorAlerts];
   return `<section class="card ${limit.alerts < 3 ? "locked" : ""}"><h3>${i18n[state.lang].tabs[8]}</h3>${alerts
     .slice(0, limit.alerts)
     .map((a) => `<div class='row'>⚠️ ${a}</div>`)
@@ -351,6 +378,9 @@ function persistState() {
   localStorage.setItem("tti-membership", state.membership);
   localStorage.setItem("tti-monitors", JSON.stringify(state.monitors));
   localStorage.setItem("tti-favorites", JSON.stringify(state.favorites));
+  localStorage.setItem("tti-hashtag-filter", state.hashtagFilter);
+  localStorage.setItem("tti-sort-by", state.sortBy);
+  localStorage.setItem("tti-query", state.query);
 }
 
 function renderBody() {
@@ -370,20 +400,39 @@ function renderBody() {
   if (addBtn) {
     addBtn.onclick = () => {
       const input = document.getElementById("monitor-input");
-      if (!input.value.trim()) return;
+      const monitorName = input.value.trim().replace(/^@/, "");
+      if (!monitorName) return;
       const limit = membershipLimits[state.membership].monitor;
-      if (state.monitors.length < limit) {
-        state.monitors.push(input.value.trim());
+      const monitorRegex = /^[A-Za-z0-9_.]+$/;
+      if (!monitorRegex.test(monitorName)) {
+        state.status = t("monitorInvalid");
+      } else if (state.monitors.includes(monitorName)) {
+        state.status = t("monitorExists");
+      } else if (state.monitors.length < limit) {
+        state.monitors.push(monitorName);
+        state.status = t("monitorAdded");
         persistState();
       }
+      input.value = "";
       renderBody();
     };
   }
+
+  document.querySelectorAll("button[data-remove-monitor]").forEach((btn) => {
+    btn.onclick = () => {
+      const monitor = btn.dataset.removeMonitor;
+      state.monitors = state.monitors.filter((m) => m !== monitor);
+      state.status = t("monitorRemoved");
+      persistState();
+      renderBody();
+    };
+  });
 
   const hashtagFilter = document.getElementById("hashtag-filter");
   if (hashtagFilter) {
     hashtagFilter.onchange = (e) => {
       state.hashtagFilter = e.target.value;
+      persistState();
       renderBody();
     };
   }
@@ -392,6 +441,16 @@ function renderBody() {
   if (sortBy) {
     sortBy.onchange = (e) => {
       state.sortBy = e.target.value;
+      persistState();
+      renderBody();
+    };
+  }
+
+  const queryInput = document.getElementById("search-query");
+  if (queryInput) {
+    queryInput.oninput = (e) => {
+      state.query = e.target.value;
+      persistState();
       renderBody();
     };
   }
