@@ -8,6 +8,7 @@ const i18n = {
     trendOverview: "当前趋势概览",
     topHashtags: "Top hashtags",
     topMusic: "Top music",
+    topVideos: "Top 视频",
     aiSummary: "AI 今日摘要",
     burstAlerts: "爆发趋势告警",
     filters: "筛选",
@@ -37,6 +38,9 @@ const i18n = {
     linkCol: "链接",
     favCol: "收藏",
     noPermission: "当前会员等级限制展示",
+    historyDays: "历史窗口",
+    monitorLimit: "监控上限",
+    alertLimit: "告警上限",
     sortHeat: "按热度",
     sortER: "按互动率",
     sortTrend: "按趋势分"
@@ -48,6 +52,7 @@ const i18n = {
     trendOverview: "Trend Overview",
     topHashtags: "Top hashtags",
     topMusic: "Top music",
+    topVideos: "Top videos",
     aiSummary: "AI Daily Summary",
     burstAlerts: "Burst trend alerts",
     filters: "Filter",
@@ -77,6 +82,9 @@ const i18n = {
     linkCol: "Link",
     favCol: "Favorite",
     noPermission: "Current plan limits this view",
+    historyDays: "History window",
+    monitorLimit: "Monitor limit",
+    alertLimit: "Alert limit",
     sortHeat: "Heat",
     sortER: "Engagement",
     sortTrend: "Trend score"
@@ -193,11 +201,15 @@ function renderTabs() {
 
 function dashboardView() {
   const hashtagRank = Object.entries(enriched.reduce((acc, v) => ((acc[v.hashtag] = (acc[v.hashtag] || 0) + v.heat_score), acc), {})).sort((a, b) => b[1] - a[1]);
+  const topVideos = [...enriched].sort((a, b) => b.play_count - a.play_count).slice(0, 3);
   return `
   <div class="grid">
     <section class="card"><h3>${t("trendOverview")}</h3><div class="kpi">${Math.round(enriched.reduce((s, v) => s + v.heat_score, 0)).toLocaleString()}</div><div class="muted">heat_score</div><div class="mini-chart"></div></section>
     <section class="card"><h3>${t("topHashtags")}</h3>${hashtagRank.map(([h, s]) => `<div class="row"><span class="badge">#${h}</span><b>${Math.round(s).toLocaleString()}</b></div>`).join("")}</section>
     <section class="card"><h3>${t("topMusic")}</h3>${[...new Set(enriched.map((v) => v.music_title))].map((m) => `<div>${m}</div>`).join("")}</section>
+    <section class="card"><h3>${t("topVideos")}</h3>${topVideos
+      .map((v) => `<div class="row"><span class="badge">#${v.hashtag}</span><b>${v.play_count.toLocaleString()}</b></div>`)
+      .join("")}</section>
     <section class="card"><h3>${t("aiSummary")}</h3><p>${state.lang === "zh" ? "转场与效率型内容增长最快，建议结合热门音乐与短时长结构。" : "Transition and efficiency-style content grows fastest. Pair trending audio with short formats."}</p></section>
     <section class="card alert"><h3>${t("burstAlerts")}</h3><div>#transition +45%</div><div>#mealprep +31%</div></section>
     <section class="card"><h3>${t("updatedAt")}</h3><div>${now.toLocaleString()}</div></section>
@@ -323,8 +335,13 @@ function favoriteView() {
 function membershipView() {
   return `<div class="grid">${Object.entries(membershipLimits)
     .map(
-      ([plan, val]) =>
-        `<section class="card"><h3>${i18n[state.lang].members[plan]}</h3><p>${val.days}d history</p><p>monitor: ${val.monitor}</p><p>alerts: ${val.alerts}</p></section>`
+      ([plan, val]) => `
+        <section class="card">
+          <h3>${i18n[state.lang].members[plan]}</h3>
+          <p>${t("historyDays")}: ${val.days}d</p>
+          <p>${t("monitorLimit")}: ${val.monitor}</p>
+          <p>${t("alertLimit")}: ${val.alerts}</p>
+        </section>`
     )
     .join("")}</div>`;
 }
