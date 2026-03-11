@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TikTok Trend Insight</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1 id="app-title">TikTok Trend Insight</h1>
+      <div class="controls">
+        <select id="language-switcher">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+        <select id="membership-switcher"></select>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs"></nav>
+
+    <main id="app"></main>
+
+    <template id="chart-template">
+      <div class="mini-chart"></div>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
