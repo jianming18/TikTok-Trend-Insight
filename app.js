@@ -50,7 +50,10 @@ const i18n = {
     monitorExists: "该账号已存在",
     monitorInvalid: "仅支持字母、数字、下划线和点",
     monitorAdded: "已添加监控账号",
-    monitorRemoved: "已移除监控账号"
+    monitorRemoved: "已移除监控账号",
+    alertTypeBurst: "爆发",
+    alertTypeDecay: "衰退",
+    alertTypeAnomaly: "异常"
   },
   en: {
     title: "TikTok Trend Insight",
@@ -101,7 +104,10 @@ const i18n = {
     monitorExists: "Account already exists",
     monitorInvalid: "Only letters, numbers, underscore and dot are supported",
     monitorAdded: "Monitor account added",
-    monitorRemoved: "Monitor account removed"
+    monitorRemoved: "Monitor account removed",
+    alertTypeBurst: "Burst",
+    alertTypeDecay: "Decay",
+    alertTypeAnomaly: "Anomaly"
   }
 };
 
@@ -183,10 +189,13 @@ const membershipLimits = {
 function metric(v) {
   const heat_score = v.play_count * 0.2 + v.like_count * 1.2 + v.comment_count * 2 + v.share_count * 2.2 + v.favorite_count * 2;
   const engagement_rate = (v.like_count + v.comment_count + v.share_count + v.favorite_count) / v.play_count;
+  const share_strength = v.share_count / v.play_count;
+  const comment_depth = v.comment_count / v.play_count;
+  const favorite_strength = v.favorite_count / v.play_count;
   const trend_score = v.growth.h24 * 0.4 + v.growth.d7 * 0.3 + v.growth.d14 * 0.2 + v.growth.d30 * 0.1;
   const burst_score = trend_score * (1 + engagement_rate * 5);
   const sustainability_score = (v.growth.d14 + v.growth.d30) / 2;
-  return { heat_score, engagement_rate, trend_score, burst_score, sustainability_score };
+  return { heat_score, engagement_rate, share_strength, comment_depth, favorite_strength, trend_score, burst_score, sustainability_score };
 }
 
 const enriched = videos.map((v) => ({ ...v, ...metric(v) }));
@@ -339,16 +348,36 @@ function monitorView() {
 
 function alertView() {
   const limit = membershipLimits[state.membership];
-  const trendAlerts = [...enriched]
+  const burstAlerts = [...enriched]
     .sort((a, b) => b.burst_score - a.burst_score)
     .slice(0, 2)
-    .map((v) => `#${v.hashtag} burst +${(v.growth.h24 * 100).toFixed(1)}%`);
-  const riskAlert = [...enriched].sort((a, b) => a.engagement_rate - b.engagement_rate)[0];
-  const monitorAlerts = state.monitors.slice(0, 2).map((m) => `@${m} watchlist update`);
-  const alerts = [...trendAlerts, `#${riskAlert.hashtag} low ER ${(riskAlert.engagement_rate * 100).toFixed(2)}%`, ...monitorAlerts];
+    .map((v) => ({
+      type: t("alertTypeBurst"),
+      text: `#${v.hashtag} +${(v.growth.h24 * 100).toFixed(1)}%`
+    }));
+  const decayAlerts = [...enriched]
+    .filter((v) => v.growth.h24 < 0.22)
+    .sort((a, b) => a.growth.h24 - b.growth.h24)
+    .slice(0, 1)
+    .map((v) => ({
+      type: t("alertTypeDecay"),
+      text: `#${v.hashtag} ${(v.growth.h24 * 100).toFixed(1)}%`
+    }));
+  const anomalyAlerts = [...enriched]
+    .sort((a, b) => a.engagement_rate - b.engagement_rate)
+    .slice(0, 1)
+    .map((v) => ({
+      type: t("alertTypeAnomaly"),
+      text: `#${v.hashtag} ER ${(v.engagement_rate * 100).toFixed(2)}%`
+    }));
+  const monitorAlerts = state.monitors.slice(0, 2).map((m) => ({
+    type: t("alertTypeAnomaly"),
+    text: `@${m} watchlist update`
+  }));
+  const alerts = [...burstAlerts, ...decayAlerts, ...anomalyAlerts, ...monitorAlerts];
   return `<section class="card ${limit.alerts < 3 ? "locked" : ""}"><h3>${i18n[state.lang].tabs[8]}</h3>${alerts
     .slice(0, limit.alerts)
-    .map((a) => `<div class='row'>⚠️ ${a}</div>`)
+    .map((a) => `<div class='row'><span class="badge">${a.type}</span><span>${a.text}</span></div>`)
     .join("")}</section>`;
 }
 
@@ -453,6 +482,13 @@ function renderBody() {
       persistState();
       renderBody();
     };
+  }
+
+  if (state.status) {
+    setTimeout(() => {
+      state.status = "";
+      renderBody();
+    }, 1800);
   }
 }
 
