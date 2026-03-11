@@ -3,7 +3,7 @@ const now = new Date();
 const i18n = {
   zh: {
     title: "TikTok 趋势洞察",
-    tabs: ["Dashboard", "Trends", "趋势详情", "视频列表", "AI趋势榜", "AI周期分析", "爆款拆解", "账号监控", "告警中心", "收藏夹", "会员体系"],
+    tabs: ["Dashboard", "Trends", "趋势详情", "视频列表", "视频跳转", "AI趋势榜", "AI周期分析", "爆款拆解", "账号监控", "告警中心", "收藏夹", "会员体系"],
     updatedAt: "最近更新时间",
     trendOverview: "当前趋势概览",
     topHashtags: "Top hashtags",
@@ -46,6 +46,9 @@ const i18n = {
     sortTrend: "按趋势分",
     search: "搜索",
     searchPlaceholder: "按视频描述/作者搜索",
+    jumpTip: "以下视频链接可用于二次验证趋势内容与互动表现。",
+    sourceCheck: "来源校验",
+    openVideo: "打开视频",
     remove: "移除",
     monitorExists: "该账号已存在",
     monitorInvalid: "仅支持字母、数字、下划线和点",
@@ -57,7 +60,7 @@ const i18n = {
   },
   en: {
     title: "TikTok Trend Insight",
-    tabs: ["Dashboard", "Trends", "Trend Detail", "Video List", "AI Rankings", "AI Cycle Analysis", "Viral Breakdown", "Account Monitor", "Alert Center", "Favorites", "Membership"],
+    tabs: ["Dashboard", "Trends", "Trend Detail", "Video List", "Video Jump", "AI Rankings", "AI Cycle Analysis", "Viral Breakdown", "Account Monitor", "Alert Center", "Favorites", "Membership"],
     updatedAt: "Last updated",
     trendOverview: "Trend Overview",
     topHashtags: "Top hashtags",
@@ -100,6 +103,9 @@ const i18n = {
     sortTrend: "Trend score",
     search: "Search",
     searchPlaceholder: "Search desc / author",
+    jumpTip: "Use these direct links to validate trend content and engagement manually.",
+    sourceCheck: "Source check",
+    openVideo: "Open video",
     remove: "Remove",
     monitorExists: "Account already exists",
     monitorInvalid: "Only letters, numbers, underscore and dot are supported",
@@ -322,8 +328,21 @@ function aiRankView() {
     .join("")}</div>`;
 }
 
+function jumpView() {
+  const list = [...enriched].sort((a, b) => b.play_count - a.play_count);
+  return `<section class="card"><h3>${i18n[state.lang].tabs[4]}</h3>
+  <p class="muted">${t("jumpTip")}</p>
+  <table class="table"><thead><tr><th>${t("videoCol")}</th><th>${t("authorCol")}</th><th>${t("sourceCheck")}</th><th>${t("linkCol")}</th></tr></thead><tbody>
+  ${list
+    .map(
+      (v) => `<tr><td>${v.desc}</td><td>@${v.author_username}</td><td>#${v.hashtag} / ${v.music_title}</td><td><a href="${v.video_url}" target="_blank" rel="noopener">${t("openVideo")}</a></td></tr>`
+    )
+    .join("")}
+  </tbody></table></section>`;
+}
+
 function aiCycleView() {
-  return `<section class="card"><h3>${i18n[state.lang].tabs[5]}</h3>
+  return `<section class="card"><h3>${i18n[state.lang].tabs[6]}</h3>
   <div class="row"><span class="badge">${t("day1")}</span><span class="badge">${t("day7")}</span><span class="badge">${t("day14")}</span><span class="badge">${t("day30")}</span></div>
   <p>${state.lang === "zh" ? "过去7天：健身餐和转场教程增长显著，旅行内容趋于平稳。" : "Last 7 days: mealprep and transition tutorials grew strongly; travel stabilized."}</p>
   </section>`;
@@ -331,7 +350,7 @@ function aiCycleView() {
 
 function viralView() {
   const v = enriched[0];
-  return `<section class="card"><h3>${i18n[state.lang].tabs[6]}</h3>
+  return `<section class="card"><h3>${i18n[state.lang].tabs[7]}</h3>
   <p>${v.desc}</p><p>length: ${v.length_sec}s, emoji: ${/\p{Emoji}/u.test(v.desc) ? "yes" : "no"}, hashtag count: ${(v.desc.match(/#/g) || []).length}, ad: ${v.is_ad}</p>
   <p>${state.lang === "zh" ? "可借鉴：前3秒强钩子 + 节奏变化 + 明确CTA。" : "Takeaways: strong 3s hook + pace shifts + explicit CTA."}</p></section>`;
 }
@@ -339,7 +358,7 @@ function viralView() {
 function monitorView() {
   const limit = membershipLimits[state.membership];
   const locked = state.monitors.length >= limit.monitor;
-  return `<section class="card ${locked ? "locked" : ""}"><h3>${i18n[state.lang].tabs[7]}</h3>
+  return `<section class="card ${locked ? "locked" : ""}"><h3>${i18n[state.lang].tabs[8]}</h3>
   <div>${state.monitors.map((a) => `<div class="row"><span>@${a}</span><button data-remove-monitor="${a}">${t("remove")}</button></div>`).join("")}</div>
   <div class="row"><input id="monitor-input" placeholder="${t("placeholder")}" /><button id="monitor-add">${t("addMonitor")}</button></div>
   <p class="muted">limit: ${limit.monitor}</p>${locked ? `<p class="muted">${t("noPermission")}</p>` : ""}
@@ -375,7 +394,7 @@ function alertView() {
     text: `@${m} watchlist update`
   }));
   const alerts = [...burstAlerts, ...decayAlerts, ...anomalyAlerts, ...monitorAlerts];
-  return `<section class="card ${limit.alerts < 3 ? "locked" : ""}"><h3>${i18n[state.lang].tabs[8]}</h3>${alerts
+  return `<section class="card ${limit.alerts < 3 ? "locked" : ""}"><h3>${i18n[state.lang].tabs[9]}</h3>${alerts
     .slice(0, limit.alerts)
     .map((a) => `<div class='row'><span class="badge">${a.type}</span><span>${a.text}</span></div>`)
     .join("")}</section>`;
@@ -383,7 +402,7 @@ function alertView() {
 
 function favoriteView() {
   const list = enriched.filter((v) => state.favorites.includes(v.id));
-  return `<section class="card"><h3>${i18n[state.lang].tabs[9]}</h3>${
+  return `<section class="card"><h3>${i18n[state.lang].tabs[10]}</h3>${
     list.length ? list.map((v) => `<div>#${v.hashtag} - ${v.desc}</div>`).join("") : `<p class="muted">${t("emptyFavorite")}</p>`
   }</section>`;
 }
@@ -413,7 +432,7 @@ function persistState() {
 }
 
 function renderBody() {
-  const views = [dashboardView, trendsView, detailView, videoListView, aiRankView, aiCycleView, viralView, monitorView, alertView, favoriteView, membershipView];
+  const views = [dashboardView, trendsView, detailView, videoListView, jumpView, aiRankView, aiCycleView, viralView, monitorView, alertView, favoriteView, membershipView];
   document.getElementById("app").innerHTML = views[state.tab]();
 
   document.querySelectorAll("button[data-fav]").forEach((btn) => {
