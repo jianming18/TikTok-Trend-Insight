@@ -8,15 +8,12 @@ const i18n = {
     trendOverview: "当前趋势概览",
     topHashtags: "Top hashtags",
     topMusic: "Top music",
-    topVideos: "Top videos",
     aiSummary: "AI 今日摘要",
     burstAlerts: "爆发趋势告警",
     filters: "筛选",
     sortBy: "排序",
     addMonitor: "添加监控账号",
-    save: "保存",
     members: { free: "免费版", pro: "Pro", team: "Team" },
-    plans: "会员权益",
     videoJump: "跳转原视频",
     favorite: "收藏",
     favorited: "已收藏",
@@ -25,6 +22,24 @@ const i18n = {
     day7: "7天",
     day14: "14天",
     day30: "30天",
+    hashtag: "话题",
+    placeholder: "请输入 creator_name",
+    empty: "暂无数据",
+    emptyFavorite: "还没有收藏视频",
+    rankTop: "综合榜",
+    rankOpportunity: "机会榜",
+    rankBurst: "爆发榜",
+    rankRisk: "风险榜",
+    videoCol: "视频",
+    authorCol: "作者",
+    playCol: "播放",
+    timeCol: "发布时间",
+    linkCol: "链接",
+    favCol: "收藏",
+    noPermission: "当前会员等级限制展示",
+    sortHeat: "按热度",
+    sortER: "按互动率",
+    sortTrend: "按趋势分"
   },
   en: {
     title: "TikTok Trend Insight",
@@ -33,15 +48,12 @@ const i18n = {
     trendOverview: "Trend Overview",
     topHashtags: "Top hashtags",
     topMusic: "Top music",
-    topVideos: "Top videos",
     aiSummary: "AI Daily Summary",
     burstAlerts: "Burst trend alerts",
     filters: "Filter",
     sortBy: "Sort by",
     addMonitor: "Add monitor account",
-    save: "Save",
     members: { free: "Free", pro: "Pro", team: "Team" },
-    plans: "Membership",
     videoJump: "Open TikTok",
     favorite: "Favorite",
     favorited: "Favorited",
@@ -50,6 +62,24 @@ const i18n = {
     day7: "7 days",
     day14: "14 days",
     day30: "30 days",
+    hashtag: "Hashtag",
+    placeholder: "Input creator_name",
+    empty: "No data",
+    emptyFavorite: "No favorite videos yet",
+    rankTop: "Top Trends",
+    rankOpportunity: "Opportunity",
+    rankBurst: "Burst",
+    rankRisk: "Risk",
+    videoCol: "Video",
+    authorCol: "Author",
+    playCol: "Play",
+    timeCol: "Time",
+    linkCol: "Link",
+    favCol: "Favorite",
+    noPermission: "Current plan limits this view",
+    sortHeat: "Heat",
+    sortER: "Engagement",
+    sortTrend: "Trend score"
   }
 };
 
@@ -111,11 +141,13 @@ const videos = [
 ];
 
 const state = {
-  lang: "zh",
+  lang: localStorage.getItem("tti-lang") || "zh",
   tab: 0,
-  membership: "free",
+  membership: localStorage.getItem("tti-membership") || "free",
   favorites: JSON.parse(localStorage.getItem("tti-favorites") || "[]"),
-  monitors: ["creator_lab"]
+  monitors: JSON.parse(localStorage.getItem("tti-monitors") || '["creator_lab"]'),
+  hashtagFilter: "all",
+  sortBy: "heat"
 };
 
 const membershipLimits = {
@@ -133,82 +165,139 @@ function metric(v) {
   return { heat_score, engagement_rate, trend_score, burst_score, sustainability_score };
 }
 
-const enriched = videos.map(v => ({ ...v, ...metric(v) }));
+const enriched = videos.map((v) => ({ ...v, ...metric(v) }));
 
-function exposure(play) { return play > 5000000 ? "S" : play > 1000000 ? "A" : play > 200000 ? "B" : "C"; }
-function authorTier(f) { return f > 1000000 ? "Mega" : f > 100000 ? "Mid" : f > 10000 ? "Micro" : "Nano"; }
+function exposure(play) {
+  return play > 5000000 ? "S" : play > 1000000 ? "A" : play > 200000 ? "B" : "C";
+}
+function authorTier(f) {
+  return f > 1000000 ? "Mega" : f > 100000 ? "Mid" : f > 10000 ? "Micro" : "Nano";
+}
 
-function t(key) { return i18n[state.lang][key]; }
+function t(key) {
+  return i18n[state.lang][key];
+}
 
 function renderTabs() {
   const tabs = document.getElementById("tabs");
-  tabs.innerHTML = i18n[state.lang].tabs.map((name, i) => `<button class="tab-btn ${state.tab === i ? "active" : ""}" data-tab="${i}">${name}</button>`).join("");
-  tabs.querySelectorAll("button").forEach(btn => btn.onclick = () => { state.tab = Number(btn.dataset.tab); render(); });
+  tabs.innerHTML = i18n[state.lang].tabs
+    .map((name, i) => `<button class="tab-btn ${state.tab === i ? "active" : ""}" data-tab="${i}">${name}</button>`)
+    .join("");
+  tabs.querySelectorAll("button").forEach((btn) =>
+    (btn.onclick = () => {
+      state.tab = Number(btn.dataset.tab);
+      render();
+    })
+  );
 }
 
 function dashboardView() {
-  const hashtagRank = Object.entries(enriched.reduce((acc, v) => (acc[v.hashtag] = (acc[v.hashtag] || 0) + v.heat_score, acc), {})).sort((a,b)=>b[1]-a[1]);
+  const hashtagRank = Object.entries(enriched.reduce((acc, v) => ((acc[v.hashtag] = (acc[v.hashtag] || 0) + v.heat_score), acc), {})).sort((a, b) => b[1] - a[1]);
   return `
   <div class="grid">
-    <section class="card"><h3>${t("trendOverview")}</h3><div class="kpi">${Math.round(enriched.reduce((s,v)=>s+v.heat_score,0)).toLocaleString()}</div><div class="muted">heat_score</div><div class="mini-chart"></div></section>
-    <section class="card"><h3>${t("topHashtags")}</h3>${hashtagRank.map(([h,s])=>`<div class="row"><span class="badge">#${h}</span><b>${Math.round(s).toLocaleString()}</b></div>`).join("")}</section>
-    <section class="card"><h3>${t("topMusic")}</h3>${[...new Set(enriched.map(v=>v.music_title))].map(m=>`<div>${m}</div>`).join("")}</section>
-    <section class="card"><h3>${t("aiSummary")}</h3><p>${state.lang==="zh"?"转场与效率型内容增长最快，建议结合热门音乐与短时长结构。":"Transition and efficiency-style content grows fastest. Pair trending audio with short formats."}</p></section>
-    <section class="card alert"><h3>${t("burstAlerts")}</h3>${enriched.sort((a,b)=>b.burst_score-a.burst_score).slice(0,2).map(v=>`<div>🔥 #${v.hashtag} (${v.author_username})</div>`).join("")}</section>
+    <section class="card"><h3>${t("trendOverview")}</h3><div class="kpi">${Math.round(enriched.reduce((s, v) => s + v.heat_score, 0)).toLocaleString()}</div><div class="muted">heat_score</div><div class="mini-chart"></div></section>
+    <section class="card"><h3>${t("topHashtags")}</h3>${hashtagRank.map(([h, s]) => `<div class="row"><span class="badge">#${h}</span><b>${Math.round(s).toLocaleString()}</b></div>`).join("")}</section>
+    <section class="card"><h3>${t("topMusic")}</h3>${[...new Set(enriched.map((v) => v.music_title))].map((m) => `<div>${m}</div>`).join("")}</section>
+    <section class="card"><h3>${t("aiSummary")}</h3><p>${state.lang === "zh" ? "转场与效率型内容增长最快，建议结合热门音乐与短时长结构。" : "Transition and efficiency-style content grows fastest. Pair trending audio with short formats."}</p></section>
+    <section class="card alert"><h3>${t("burstAlerts")}</h3><div>#transition +45%</div><div>#mealprep +31%</div></section>
     <section class="card"><h3>${t("updatedAt")}</h3><div>${now.toLocaleString()}</div></section>
   </div>`;
 }
 
 function trendsView() {
   return `<div class="grid">
-    ${enriched.map(v => `<section class="card"><h3>#${v.hashtag}</h3><div class="row"><span class="badge">${exposure(v.play_count)}</span><span class="badge">${authorTier(v.followers)}</span></div><p>24h: ${(v.growth.h24*100).toFixed(1)}% | 7d: ${(v.growth.d7*100).toFixed(1)}%</p><div class="mini-chart"></div></section>`).join("")}
+    ${enriched
+      .map(
+        (v) => `<section class="card"><h3>#${v.hashtag}</h3><div class="row"><span class="badge">${exposure(v.play_count)}</span><span class="badge">${authorTier(v.followers)}</span></div><p>24h: ${(v.growth.h24 * 100).toFixed(1)}% | 7d: ${(v.growth.d7 * 100).toFixed(1)}%</p><div class="mini-chart"></div></section>`
+      )
+      .join("")}
   </div>`;
 }
 
 function detailView() {
-  const v = enriched.sort((a,b)=>b.trend_score-a.trend_score)[0];
-  return `<section class="card"><h2>#${v.hashtag}</h2><p>heat_score: ${Math.round(v.heat_score)}</p><p>trend_score: ${v.trend_score.toFixed(2)}</p><p>sustainability_score: ${v.sustainability_score.toFixed(2)}</p><p>${state.lang==='zh'?'AI 结论：该趋势由短时长高转发驱动，仍在增长窗口。':'AI insight: this trend is fueled by short-form sharing and remains in growth window.'}</p></section>`;
+  const v = [...enriched].sort((a, b) => b.trend_score - a.trend_score)[0];
+  return `<section class="card"><h2>#${v.hashtag}</h2><p>heat_score: ${Math.round(v.heat_score)}</p><p>trend_score: ${v.trend_score.toFixed(2)}</p><p>sustainability_score: ${v.sustainability_score.toFixed(2)}</p><p>${state.lang === "zh" ? "AI 结论：该趋势由短时长高转发驱动，仍在增长窗口。" : "AI insight: this trend is fueled by short-form sharing and remains in growth window."}</p></section>`;
+}
+
+function sortedVideos(list) {
+  const keyMap = {
+    heat: (v) => v.heat_score,
+    er: (v) => v.engagement_rate,
+    trend: (v) => v.trend_score
+  };
+  return [...list].sort((a, b) => keyMap[state.sortBy](b) - keyMap[state.sortBy](a));
 }
 
 function videoListView() {
-  const rows = enriched.map(v => `<tr>
-    <td>${v.desc}</td><td>${v.author_username}</td><td>${v.play_count.toLocaleString()}</td><td>${((v.engagement_rate)*100).toFixed(2)}%</td><td>${v.publish_hour}:00</td>
+  const filtered = state.hashtagFilter === "all" ? enriched : enriched.filter((v) => v.hashtag === state.hashtagFilter);
+  const list = sortedVideos(filtered);
+  const rows = list
+    .map(
+      (v) => `<tr>
+    <td>${v.desc}</td><td>${v.author_username}</td><td>${v.play_count.toLocaleString()}</td><td>${(v.engagement_rate * 100).toFixed(2)}%</td><td>${v.publish_hour}:00</td>
     <td><a href="${v.video_url}" target="_blank" rel="noopener">${t("videoJump")}</a></td>
-    <td><button data-fav="${v.id}">${state.favorites.includes(v.id)?t("favorited"):t("favorite")}</button></td></tr>`).join("");
-  return `<section class="card"><h3>${t("filters")} / ${t("sortBy")}</h3><p class="muted">heat_score desc</p><table class="table"><thead><tr><th>Video</th><th>Author</th><th>Play</th><th>ER</th><th>Time</th><th>Link</th><th>Fav</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+    <td><button data-fav="${v.id}">${state.favorites.includes(v.id) ? t("favorited") : t("favorite")}</button></td></tr>`
+    )
+    .join("");
+
+  return `<section class="card"><h3>${t("filters")} / ${t("sortBy")}</h3>
+  <div class="row controls-inline">
+    <label>${t("hashtag")}
+      <select id="hashtag-filter">
+        <option value="all" ${state.hashtagFilter === "all" ? "selected" : ""}>${t("all")}</option>
+        ${[...new Set(enriched.map((v) => v.hashtag))].map((h) => `<option value="${h}" ${state.hashtagFilter === h ? "selected" : ""}>#${h}</option>`).join("")}
+      </select>
+    </label>
+    <label>${t("sortBy")}
+      <select id="sort-by">
+        <option value="heat" ${state.sortBy === "heat" ? "selected" : ""}>${t("sortHeat")}</option>
+        <option value="er" ${state.sortBy === "er" ? "selected" : ""}>${t("sortER")}</option>
+        <option value="trend" ${state.sortBy === "trend" ? "selected" : ""}>${t("sortTrend")}</option>
+      </select>
+    </label>
+  </div>
+  <table class="table"><thead><tr><th>${t("videoCol")}</th><th>${t("authorCol")}</th><th>${t("playCol")}</th><th>ER</th><th>${t("timeCol")}</th><th>${t("linkCol")}</th><th>${t("favCol")}</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="muted">${t("empty")}</td></tr>`}</tbody></table></section>`;
 }
 
 function aiRankView() {
-  const top = [...enriched].sort((a,b)=>b.trend_score-a.trend_score);
+  const top = [...enriched].sort((a, b) => b.trend_score - a.trend_score);
   return `<div class="grid">${[
-    ["Top Trends", top],
-    ["Opportunity", [...enriched].sort((a,b)=>b.sustainability_score-a.sustainability_score)],
-    ["Burst", [...enriched].sort((a,b)=>b.burst_score-a.burst_score)],
-    ["Risk", [...enriched].sort((a,b)=>a.engagement_rate-b.engagement_rate)]
-  ].map(([name,arr])=>`<section class="card"><h3>${name}</h3>${arr.slice(0,3).map(v=>`<div>#${v.hashtag} - ${v.author_username}</div>`).join('')}<p class="muted">${state.lang==='zh'?'建议：优先复用前2名结构并A/B测试标题。':'Action: reuse top-2 structures and A/B test hooks.'}</p></section>`).join('')}</div>`;
+    [t("rankTop"), top],
+    [t("rankOpportunity"), [...enriched].sort((a, b) => b.sustainability_score - a.sustainability_score)],
+    [t("rankBurst"), [...enriched].sort((a, b) => b.burst_score - a.burst_score)],
+    [t("rankRisk"), [...enriched].sort((a, b) => a.engagement_rate - b.engagement_rate)]
+  ]
+    .map(
+      ([name, arr]) =>
+        `<section class="card"><h3>${name}</h3>${arr
+          .slice(0, 3)
+          .map((v) => `<div>#${v.hashtag} - ${v.author_username}</div>`)
+          .join("")}<p class="muted">${state.lang === "zh" ? "建议：优先复用前2名结构并A/B测试标题。" : "Action: reuse top-2 structures and A/B test hooks."}</p></section>`
+    )
+    .join("")}</div>`;
 }
 
 function aiCycleView() {
   return `<section class="card"><h3>${i18n[state.lang].tabs[5]}</h3>
-  <div class="row"><span class="badge">${t('day1')}</span><span class="badge">${t('day7')}</span><span class="badge">${t('day14')}</span><span class="badge">${t('day30')}</span></div>
-  <p>${state.lang==='zh'?'过去7天：健身餐和转场教程增长显著，旅行内容趋于平稳。':'Last 7 days: mealprep and transition tutorials grew strongly; travel stabilized.'}</p>
+  <div class="row"><span class="badge">${t("day1")}</span><span class="badge">${t("day7")}</span><span class="badge">${t("day14")}</span><span class="badge">${t("day30")}</span></div>
+  <p>${state.lang === "zh" ? "过去7天：健身餐和转场教程增长显著，旅行内容趋于平稳。" : "Last 7 days: mealprep and transition tutorials grew strongly; travel stabilized."}</p>
   </section>`;
 }
 
 function viralView() {
   const v = enriched[0];
   return `<section class="card"><h3>${i18n[state.lang].tabs[6]}</h3>
-  <p>${v.desc}</p><p>length: ${v.length_sec}s, emoji: ${/\p{Emoji}/u.test(v.desc) ? 'yes':'no'}, hashtag count: ${(v.desc.match(/#/g)||[]).length}, ad: ${v.is_ad}</p>
-  <p>${state.lang==='zh'?'可借鉴：前3秒强钩子 + 节奏变化 + 明确CTA。':'Takeaways: strong 3s hook + pace shifts + explicit CTA.'}</p></section>`;
+  <p>${v.desc}</p><p>length: ${v.length_sec}s, emoji: ${/\p{Emoji}/u.test(v.desc) ? "yes" : "no"}, hashtag count: ${(v.desc.match(/#/g) || []).length}, ad: ${v.is_ad}</p>
+  <p>${state.lang === "zh" ? "可借鉴：前3秒强钩子 + 节奏变化 + 明确CTA。" : "Takeaways: strong 3s hook + pace shifts + explicit CTA."}</p></section>`;
 }
 
 function monitorView() {
   const limit = membershipLimits[state.membership];
   const locked = state.monitors.length >= limit.monitor;
-  return `<section class="card ${locked?'locked':''}"><h3>${i18n[state.lang].tabs[7]}</h3>
-  <div>${state.monitors.map(a=>`<div>@${a}</div>`).join('')}</div>
-  <div class="row"><input id="monitor-input" placeholder="creator_name" /><button id="monitor-add">${t('addMonitor')}</button></div>
-  <p class="muted">limit: ${limit.monitor}</p></section>`;
+  return `<section class="card ${locked ? "locked" : ""}"><h3>${i18n[state.lang].tabs[7]}</h3>
+  <div>${state.monitors.map((a) => `<div>@${a}</div>`).join("")}</div>
+  <div class="row"><input id="monitor-input" placeholder="${t("placeholder")}" /><button id="monitor-add">${t("addMonitor")}</button></div>
+  <p class="muted">limit: ${limit.monitor}</p>${locked ? `<p class="muted">${t("noPermission")}</p>` : ""}</section>`;
 }
 
 function alertView() {
@@ -218,27 +307,44 @@ function alertView() {
     "#travel slowdown -12%",
     "@creator_lab engagement anomaly"
   ];
-  return `<section class="card ${limit.alerts<3?'locked':''}"><h3>${i18n[state.lang].tabs[8]}</h3>${alerts.slice(0, limit.alerts).map(a=>`<div class='row'>⚠️ ${a}</div>`).join('')}</section>`;
+  return `<section class="card ${limit.alerts < 3 ? "locked" : ""}"><h3>${i18n[state.lang].tabs[8]}</h3>${alerts
+    .slice(0, limit.alerts)
+    .map((a) => `<div class='row'>⚠️ ${a}</div>`)
+    .join("")}</section>`;
 }
 
 function favoriteView() {
-  const list = enriched.filter(v=>state.favorites.includes(v.id));
-  return `<section class="card"><h3>${i18n[state.lang].tabs[9]}</h3>${list.length?list.map(v=>`<div>#${v.hashtag} - ${v.desc}</div>`).join(''):'<p class="muted">Empty</p>'}</section>`;
+  const list = enriched.filter((v) => state.favorites.includes(v.id));
+  return `<section class="card"><h3>${i18n[state.lang].tabs[9]}</h3>${
+    list.length ? list.map((v) => `<div>#${v.hashtag} - ${v.desc}</div>`).join("") : `<p class="muted">${t("emptyFavorite")}</p>`
+  }</section>`;
 }
 
 function membershipView() {
-  return `<div class="grid">${Object.entries(membershipLimits).map(([plan,val])=>`<section class="card"><h3>${i18n[state.lang].members[plan]}</h3><p>${val.days}d history</p><p>monitor: ${val.monitor}</p><p>alerts: ${val.alerts}</p></section>`).join('')}</div>`;
+  return `<div class="grid">${Object.entries(membershipLimits)
+    .map(
+      ([plan, val]) =>
+        `<section class="card"><h3>${i18n[state.lang].members[plan]}</h3><p>${val.days}d history</p><p>monitor: ${val.monitor}</p><p>alerts: ${val.alerts}</p></section>`
+    )
+    .join("")}</div>`;
+}
+
+function persistState() {
+  localStorage.setItem("tti-lang", state.lang);
+  localStorage.setItem("tti-membership", state.membership);
+  localStorage.setItem("tti-monitors", JSON.stringify(state.monitors));
+  localStorage.setItem("tti-favorites", JSON.stringify(state.favorites));
 }
 
 function renderBody() {
   const views = [dashboardView, trendsView, detailView, videoListView, aiRankView, aiCycleView, viralView, monitorView, alertView, favoriteView, membershipView];
   document.getElementById("app").innerHTML = views[state.tab]();
 
-  document.querySelectorAll("button[data-fav]").forEach(btn => {
+  document.querySelectorAll("button[data-fav]").forEach((btn) => {
     btn.onclick = () => {
       const id = btn.dataset.fav;
-      state.favorites = state.favorites.includes(id) ? state.favorites.filter(v=>v!==id) : [...state.favorites, id];
-      localStorage.setItem("tti-favorites", JSON.stringify(state.favorites));
+      state.favorites = state.favorites.includes(id) ? state.favorites.filter((v) => v !== id) : [...state.favorites, id];
+      persistState();
       renderBody();
     };
   });
@@ -249,7 +355,26 @@ function renderBody() {
       const input = document.getElementById("monitor-input");
       if (!input.value.trim()) return;
       const limit = membershipLimits[state.membership].monitor;
-      if (state.monitors.length < limit) state.monitors.push(input.value.trim());
+      if (state.monitors.length < limit) {
+        state.monitors.push(input.value.trim());
+        persistState();
+      }
+      renderBody();
+    };
+  }
+
+  const hashtagFilter = document.getElementById("hashtag-filter");
+  if (hashtagFilter) {
+    hashtagFilter.onchange = (e) => {
+      state.hashtagFilter = e.target.value;
+      renderBody();
+    };
+  }
+
+  const sortBy = document.getElementById("sort-by");
+  if (sortBy) {
+    sortBy.onchange = (e) => {
+      state.sortBy = e.target.value;
       renderBody();
     };
   }
@@ -258,12 +383,23 @@ function renderBody() {
 function render() {
   document.getElementById("app-title").textContent = i18n[state.lang].title;
   const memberSelect = document.getElementById("membership-switcher");
-  memberSelect.innerHTML = Object.keys(i18n[state.lang].members).map(m => `<option value="${m}" ${state.membership===m?'selected':''}>${i18n[state.lang].members[m]}</option>`).join("");
+  memberSelect.innerHTML = Object.keys(i18n[state.lang].members)
+    .map((m) => `<option value="${m}" ${state.membership === m ? "selected" : ""}>${i18n[state.lang].members[m]}</option>`)
+    .join("");
   renderTabs();
   renderBody();
 }
 
-document.getElementById("language-switcher").onchange = (e) => { state.lang = e.target.value; render(); };
-document.getElementById("membership-switcher").onchange = (e) => { state.membership = e.target.value; render(); };
+document.getElementById("language-switcher").value = state.lang;
+document.getElementById("language-switcher").onchange = (e) => {
+  state.lang = e.target.value;
+  persistState();
+  render();
+};
+document.getElementById("membership-switcher").onchange = (e) => {
+  state.membership = e.target.value;
+  persistState();
+  render();
+};
 
 render();
